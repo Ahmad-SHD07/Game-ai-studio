@@ -1,0 +1,6 @@
+{
+  "name": "Mushroom Kingdom Defense",
+  "description": "A polished, browser-based tower defense game with grid placement, waves, upgrades, and a leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
