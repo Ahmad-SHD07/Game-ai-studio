@@ -128,36 +128,36 @@ const TOWER_INFO = {
   SPORE: {
     emoji: '🍃', name: 'Spore Shooter', desc: 'Normal single target tower.', color: '#8fce00',
     levels: [
-      { cost: 50, damage: 20, range: 2.5, fireRate: 1.2 },
-      { cost: 75, damage: 35, range: 3.0, fireRate: 1.6 },
-      { cost: 120, damage: 60, range: 3.5, fireRate: 2.2 }
+      { cost: 50, damage: 25, range: 2.6, fireRate: 1.3 },
+      { cost: 75, damage: 48, range: 3.1, fireRate: 1.8 },
+      { cost: 120, damage: 95, range: 3.6, fireRate: 2.4 }
     ]
   },
   POISON: {
     emoji: '🟣', name: 'Poison Shroom', desc: 'Applies damage over time & slows.', color: '#9c27b0',
     levels: [
-      { cost: 100, damage: 12, slow: 0.4, range: 2.5, fireRate: 1 },
-      { cost: 130, damage: 25, slow: 0.55, range: 3.0, fireRate: 1 },
-      { cost: 200, damage: 40, slow: 0.70, range: 3.5, fireRate: 1 }
+      { cost: 100, damage: 15, slow: 0.45, range: 2.6, fireRate: 1.1 },
+      { cost: 130, damage: 32, slow: 0.60, range: 3.1, fireRate: 1.2 },
+      { cost: 200, damage: 55, slow: 0.75, range: 3.6, fireRate: 1.3 }
     ]
   },
   GIANT: {
     emoji: '🍄', name: 'Giant Mushroom', desc: 'Heavy splash damage in an area.', color: '#f44336',
     levels: [
-       { cost: 200, damage: 85, range: 2.0, fireRate: 0.6, splash: 1.2 },
-       { cost: 250, damage: 150, range: 2.5, fireRate: 0.8, splash: 1.8 },
-       { cost: 380, damage: 250, range: 3.0, fireRate: 1.0, splash: 2.5 }
+       { cost: 200, damage: 110, range: 2.1, fireRate: 0.7, splash: 1.4 },
+       { cost: 250, damage: 190, range: 2.6, fireRate: 0.9, splash: 2.0 },
+       { cost: 380, damage: 320, range: 3.1, fireRate: 1.1, splash: 2.8 }
     ]
   }
 };
 
 const ENEMY_DEFS = {
-  CATERPILLAR: { emoji: '🐛', baseHp: 80, speed: 1.5, reward: 12, size: 28 },
-  BEETLE: { emoji: '🪲', baseHp: 150, speed: 2.5, reward: 20, size: 30 },
-  TERMITE: { emoji: '🐜', baseHp: 300, speed: 1.0, reward: 35, size: 32 },
-  BOSS_6: { emoji: '🪲', isBoss: true, baseHp: 1500, speed: 1.5, reward: 120, size: 48 },
-  BOSS_12: { emoji: '🐜', isBoss: true, baseHp: 3500, speed: 0.8, reward: 250, size: 52, split: true },
-  BOSS_18: { emoji: '🍄', isBoss: true, baseHp: 6000, speed: 1.5, reward: 400, size: 56, regen: 15, immuneToSlow: true }
+  CATERPILLAR: { emoji: '🐛', baseHp: 80, speed: 1.1, reward: 12, size: 28 },
+  BEETLE: { emoji: '🪲', baseHp: 150, speed: 1.6, reward: 20, size: 30 },
+  TERMITE: { emoji: '🐜', baseHp: 300, speed: 0.8, reward: 35, size: 32 },
+  BOSS_6: { emoji: '🪲', isBoss: true, baseHp: 1500, speed: 1.0, reward: 120, size: 48 },
+  BOSS_12: { emoji: '🐜', isBoss: true, baseHp: 3500, speed: 0.6, reward: 250, size: 52, split: true },
+  BOSS_18: { emoji: '🍄', isBoss: true, baseHp: 6000, speed: 1.0, reward: 400, size: 56, regen: 15, immuneToSlow: true }
 };
 
 // --- GLOBALS ---
@@ -168,6 +168,7 @@ let lastTime = 0, loopRunning = false, globalTime = 0;
 let towers = [], enemies = [], projectiles = [], particles = [];
 let gold = 200, lives = 3, score = 0, waveNumber = 1, endlessMode = false;
 let fastForward = false, isPaused = false;
+let bossesDefeatedCount = 0;
 let waveState = 'MENU'; // MENU, PREP, PLAY, GAMEOVER, VICTORY, LEADERBOARD
 let prepTimer = 8, spawnTimer = 0, enemiesToSpawn = [];
 let hoverC = -1, hoverR = -1;
@@ -218,7 +219,7 @@ function escapeHTML(str) { return str.replace(/&/g, '&amp;').replace(/</g, '&lt;
 
 function initGame() {
     gold = 200; lives = 3; score = 0; waveNumber = 1; endlessMode = false;
-    isPaused = false; fastForward = false;
+    isPaused = false; fastForward = false; bossesDefeatedCount = 0;
     towers = []; enemies = []; projectiles = []; particles = [];
     
     // reset map grid
@@ -438,6 +439,8 @@ function spawnEnemy(defKey) {
        maxHp = def.baseHp * (1 + 0.18 * waveNumber);
    }
    
+   maxHp = maxHp * (1 + 0.04 * bossesDefeatedCount);
+   
    enemies.push({
       id: Math.random(), ...def,
       hp: maxHp, maxHp: maxHp, wpIdx: 1,
@@ -533,14 +536,16 @@ function updateGame(dt) {
             
             if (move >= dist) {
                 projectiles.splice(i, 1);
+                let dmgMult = Math.max(0.2, 1 - 0.04 * bossesDefeatedCount);
                 if (p.splash > 0) {
                     spawnShockwave(p.tx, p.ty, p.splash);
                     for (let e of enemies) {
                         if (Math.hypot(e.x - p.tx, e.y - p.ty) <= p.splash * TILE_SIZE) {
-                            e.hp -= p.damage; e.flashTime = 0.1; e.flashColor = 'rgba(244, 67, 54, 0.6)';
+                            e.hp -= p.damage * dmgMult; e.flashTime = 0.1; e.flashColor = 'rgba(244, 67, 54, 0.6)';
                         }
                     }
                 } else if (t && !t.dead) {
+                    t.hp -= p.damage * dmgMult;
                     if (p.poison) {
                         let existing = t.effects.find(ef => ef.type === 'POISON');
                         if (existing) {
@@ -552,7 +557,6 @@ function updateGame(dt) {
                         }
                         t.flashTime = 0.1; t.flashColor = 'rgba(76, 175, 80, 0.6)';
                     } else {
-                        t.hp -= p.damage;
                         t.flashTime = 0.1; t.flashColor = 'rgba(255, 255, 255, 0.7)';
                     }
                     spawnHitParticles(p.tx, p.ty, p.color);
@@ -570,7 +574,8 @@ function updateGame(dt) {
                 let eff = e.effects[j];
                 eff.duration -= dt;
                 if (eff.type === 'POISON') {
-                    e.hp -= eff.dps * dt;
+                    let dmgMult = Math.max(0.2, 1 - 0.04 * bossesDefeatedCount);
+                    e.hp -= eff.dps * dt * dmgMult;
                     slowFactor = Math.max(slowFactor, eff.slow);
                 }
                 if (eff.duration <= 0) e.effects.splice(j, 1);
@@ -584,9 +589,15 @@ function updateGame(dt) {
             if (e.hp <= 0 && !e.dead) {
                 e.dead = true;
                 gold += e.reward; score += e.reward;
-                if (e.isBoss) { screenShake = 0.2; spawnExplosion(e.x, e.y, 40); } else { spawnBurst(e.x, e.y, 8); }
+                if (e.isBoss) { 
+                    screenShake = 0.2; 
+                    spawnExplosion(e.x, e.y, 40); 
+                    bossesDefeatedCount++;
+                } else { 
+                    spawnBurst(e.x, e.y, 8); 
+                }
                 if (e.split) {
-                    let teDef = ENEMY_DEFS.TERMITE, scale = 1 + 0.18 * waveNumber;
+                    let teDef = ENEMY_DEFS.TERMITE, scale = (1 + 0.18 * waveNumber) * (1 + 0.04 * bossesDefeatedCount);
                     for(let k=0; k<3; k++) {
                        enemies.push({
                           id: Math.random(), ...teDef,
